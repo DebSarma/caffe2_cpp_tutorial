@@ -122,10 +122,8 @@ void run() {
   // AddSuperNaive(full_init_model, full_predict_model, label_index);
   AddNaive(first_init_model, first_predict_model, FLAGS_channel);
 
-  // std::cout << "first_init_model -------------" << std::endl;
-  // print(first_init_model);
-  // std::cout << "first_predict_model -------------" << std::endl;
-  // print(first_predict_model);
+  // std::cout << join_net(first_init_model);
+  // std::cout << join_net(first_predict_model);
 
   // set model to use CUDA
   if (!FLAGS_force_cpu) {

@@ -272,6 +272,23 @@ void SplitModel(NetDef &base_init_model, NetDef &base_predict_model, const std::
   if (second_predict_model.op().size()) {
     second_predict_model.add_external_output(base_predict_model.external_output(0));
   }
+
+  if (base_init_model.has_name()) {
+    if (!first_init_model.has_name()) {
+      first_init_model.set_name(base_init_model.name() + "_first");
+    }
+    if (!second_init_model.has_name()) {
+      second_init_model.set_name(base_init_model.name() + "_second");
+    }
+  }
+  if (base_predict_model.has_name()) {
+    if (!first_predict_model.has_name()) {
+      first_predict_model.set_name(base_predict_model.name() + "_first");
+    }
+    if (!second_predict_model.has_name()) {
+      second_predict_model.set_name(base_predict_model.name() + "_second");
+    }
+  }
 }
 
 void TrainModel(NetDef &base_init_model, NetDef &base_predict_model, const std::string &layer, int out_size, NetDef &train_init_model, NetDef &train_predict_model, float base_rate, std::string &optimizer) {
