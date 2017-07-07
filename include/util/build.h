@@ -412,8 +412,8 @@ void add_channel_mean_ops(NetDef &model, const std::string &output, int dim, int
       ranges[i] = { 0, -1 };
     }
   }
-  add_slice_op(model, output, "pick", ranges);
-  add_reshape_op(model, "pick", "reshape", { -1 });
+  add_slice_op(model, output, "slice", ranges);
+  add_reshape_op(model, "slice", "reshape", { -1 });
   add_averaged_loss(model, "reshape", "score");
   add_constant_fill_with_op(model, 1.0, "score", "score" + gradient_suffix);
 }
