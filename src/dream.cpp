@@ -17,14 +17,15 @@
 
 
 CAFFE2_DEFINE_string(model, "googlenet", "Name of one of the pre-trained models.");
-CAFFE2_DEFINE_string(layer, "pool3/3x3_s2", "Name of the layer on which to split the model.");
-CAFFE2_DEFINE_int(channel, 3, "The of channel runs.");
+CAFFE2_DEFINE_string(layer, "inception_4d/3x3_reduce", "Name of the layer on which to split the model.");
+CAFFE2_DEFINE_int(channel, 139, "The of channel runs.");
+CAFFE2_DEFINE_int(initial, -28, "The of initial value.");
 
 CAFFE2_DEFINE_string(image_file, "res/image_file.jpg", "The image file.");
 // CAFFE2_DEFINE_string(label, "Chihuahua", "What we're dreaming about.");
-CAFFE2_DEFINE_int(train_runs, 200 * caffe2::cuda_multipier, "The of training runs.");
+CAFFE2_DEFINE_int(train_runs, 10, "The of training runs.");
 CAFFE2_DEFINE_int(size_to_fit, 224, "The image file.");
-CAFFE2_DEFINE_double(learning_rate, 1e-1, "Learning rate.");
+CAFFE2_DEFINE_double(learning_rate, 1, "Learning rate.");
 CAFFE2_DEFINE_bool(force_cpu, false, "Only use CPU, no CUDA.");
 
 namespace caffe2 {
@@ -49,8 +50,7 @@ void AddNaive(NetDef &init_model, NetDef &predict_model, int channel) {
   auto &output = predict_model.external_output(0);
   add_channel_mean_ops(predict_model, output, 1, 4, channel);
   add_gradient_ops(predict_model);
-  add_uniform_fill_float_op(init_model, { 1, 3, FLAGS_size_to_fit, FLAGS_size_to_fit }, -FLAGS_learning_rate / 10, FLAGS_learning_rate / 10, predict_model.external_input(0));
-  // add_constant_fill_float_op(init_model, { 1, 3, FLAGS_size_to_fit, FLAGS_size_to_fit }, 1, predict_model.external_input(0));
+  add_uniform_fill_float_op(init_model, { 1, 3, FLAGS_size_to_fit, FLAGS_size_to_fit }, FLAGS_initial, FLAGS_initial + 1, predict_model.external_input(0));
 }
 
 void run() {
@@ -114,10 +114,15 @@ void run() {
   CAFFE_ENFORCE(ReadProtoFromFile(predict_filename.c_str(), &full_predict_model));
   load_time += clock();
 
+  // std::cout << join_net(full_init_model);
+  // std::cout << join_net(full_predict_model);
+
+  // std::cout << collect_layers(full_predict_model, "inception_3a/5x5") << std::endl;
+
   CheckLayerAvailable(full_predict_model, FLAGS_layer);
 
   NetDef first_init_model, first_predict_model, second_init_model, second_predict_model;
-  SplitModel(full_init_model, full_predict_model, FLAGS_layer, first_init_model, first_predict_model, second_init_model, second_predict_model, FLAGS_force_cpu);
+  SplitModel(full_init_model, full_predict_model, FLAGS_layer, first_init_model, first_predict_model, second_init_model, second_predict_model, FLAGS_force_cpu, false);
 
   // AddSuperNaive(full_init_model, full_predict_model, label_index);
   AddNaive(first_init_model, first_predict_model, FLAGS_channel);
@@ -147,9 +152,14 @@ void run() {
   // set_tensor_blob(*workspace.GetBlob(input_name), input);
   // showImageTensor(input, 0);
 
-  TensorCPU show;
-  show.CopyFrom(get_tensor_blob(*workspace.GetBlob("data")));
-  normalize_tensor(show, 50);
+  float mean = 0, stdev = 0;
+
+  auto data = get_tensor_blob(*workspace.GetBlob("data"));
+  TensorCPU show; show.CopyFrom(data);
+  mean_stdev_tensor(show, &mean, &stdev);
+  float s = 25.5 / std::max(stdev, 1e-4f);
+  affine_transform_tensor(show, s, -mean * s);
+  clip_tensor(show, -128, 128);
   showImageTensor(show, 0);
 
   // run predictor
@@ -160,39 +170,36 @@ void run() {
     dream_time += clock();
 
     auto grad = get_tensor_blob(*workspace.GetBlob("data_grad"));
-    float mean = 0, stdev = 0;
-    mean_stdev_tensor(grad, &mean, &stdev);
+    mean_stdev_tensor(grad, 0, &stdev);
     affine_transform_tensor(grad, FLAGS_learning_rate / (stdev + 1e-8));
     auto data = get_tensor_blob(*workspace.GetBlob("data"));
     add_tensor(data, grad);
-    set_tensor_blob(*workspace.GetBlob("data"), data);
 
     // print(*workspace.GetBlob(FLAGS_layer), FLAGS_layer);
-    // print(*workspace.GetBlob("pick"), "pick");
+    // print(*workspace.GetBlob("slice"), "slice");
     // print(*workspace.GetBlob("reshape"), "reshape");
     // print(*workspace.GetBlob("score"), "score");
     // print(*workspace.GetBlob("score_grad"), "score_grad");
     // print(*workspace.GetBlob("reshape_grad"), "reshape_grad");
-    // print(*workspace.GetBlob("pick_grad"), "pick_grad");
+    // print(*workspace.GetBlob("slice_grad"), "slice_grad");
     // print(*workspace.GetBlob(FLAGS_layer + "_grad"), FLAGS_layer + "_grad");
     // print(*workspace.GetBlob("data_grad"), "data_grad");
     // break;
 
 
-    if (i % (10 * cuda_multipier) == 0) {
-      auto score = get_tensor_blob(*workspace.GetBlob("score")).data<float>()[0];
-      std::cout << "step: " << i << "  score: " << score << "  mean: " << mean << "  stdev: " << stdev << std::endl;
-      if (score == 0) {
-        std::cout << "score is zero, try lower learning rate: --learning_rate 1e" << ((int)log10(FLAGS_learning_rate) - 1) << std::endl;
-        break;
-      }
+    TensorCPU show; show.CopyFrom(data);
+    mean_stdev_tensor(show, &mean, &stdev);
+    float s = 25.5 / std::max(stdev, 1e-4f);
+    affine_transform_tensor(show, s, -mean * s);
+    clip_tensor(show, -128, 128);
+    showImageTensor(show, 0);
+    // writeImageTensor(show, { "deep_" + std::to_string(i) + ".jpg" });
 
-      TensorCPU show; show.CopyFrom(data);
-      normalize_tensor(show, 50);
-      showImageTensor(show, 0);
-      // writeImageTensor(show, { "deep_" + std::to_string(i) + ".jpg" });
-    }
+    auto score = get_tensor_blob(*workspace.GetBlob("score")).data<float>()[0];
+    std::cout << "step: " << i << "  score: " << score << std::endl;
   }
+
+  usleep(5000000);
 
   std::cout << std::endl;
 
