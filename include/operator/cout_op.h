@@ -1,5 +1,5 @@
-#ifndef OPERATOR_COUT_H
-#define OPERATOR_COUT_H
+#ifndef COUT_OP_H
+#define COUT_OP_H
 
 #include "caffe2/core/operator.h"
 
@@ -50,4 +50,4 @@ SHOULD_NOT_DO_GRADIENT(Cout);
 
 }  // namespace caffe2
 
-#endif  // OPERATOR_COUT_H
+#endif  // COUT_OP_H

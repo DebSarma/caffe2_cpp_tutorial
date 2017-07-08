@@ -81,10 +81,13 @@ void set_diagonal_tensor(Tensor<C> &tensor, const Tensor<C> &diagonal, const std
 }
 
 template<typename C>
-void get_back_mean_tensor(const Tensor<C> &tensor, Tensor<C> &mean) {
+void get_back_mean_tensor(const Tensor<C> &tensor, Tensor<C> &mean, int count = 1) {
   auto dims = tensor.dims();
-  auto size = dims.back();
-  dims.pop_back();
+  auto size = 1;
+  while (count--) {
+    size *= dims.back();
+    dims.pop_back();
+  }
   mean.Resize(dims);
   auto data = tensor.template data<float>();
   auto mean_data = mean.template mutable_data<float>();
@@ -99,8 +102,13 @@ void get_back_mean_tensor(const Tensor<C> &tensor, Tensor<C> &mean) {
 }
 
 template<typename C>
-void set_back_mean_tensor(Tensor<C> &tensor, const Tensor<C> &mean) {
-  auto size = tensor.dims().back();
+void set_back_mean_tensor(Tensor<C> &tensor, const Tensor<C> &mean, int count = 1) {
+  auto dims = tensor.dims();
+  auto size = 1;
+  while (count--) {
+    size *= dims.back();
+    dims.pop_back();
+  }
   auto data = tensor.template mutable_data<float>();
   auto mean_data = mean.template data<float>();
   auto mean_end = mean_data + mean.size();

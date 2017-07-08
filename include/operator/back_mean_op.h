@@ -9,18 +9,26 @@ template <typename T, class Context>
 class BackMeanOp final : public Operator<Context> {
  public:
   BackMeanOp(const OperatorDef& operator_def, Workspace* ws)
-      : Operator<Context>(operator_def, ws) {}
+      : Operator<Context>(operator_def, ws),
+        count_(OperatorBase::GetSingleArgument<int>("count", 1)) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
   bool RunOnDevice() override;
+
+ protected:
+  int count_;
 };
 
 template <typename T, class Context>
 class BackMeanGradientOp final : public Operator<Context> {
  public:
   BackMeanGradientOp(const OperatorDef& operator_def, Workspace* ws)
-      : Operator<Context>(operator_def, ws) {}
+      : Operator<Context>(operator_def, ws),
+        count_(OperatorBase::GetSingleArgument<int>("count", 1)) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
   bool RunOnDevice() override;
+
+ protected:
+  int count_;
 };
 
 } // namespace caffe2

@@ -7,7 +7,7 @@ template <>
 bool BackMeanOp<float, CPUContext>::RunOnDevice() {
   auto& X = Input(0);
   auto* Y = Output(0);
-  get_back_mean_tensor(X, *Y);
+  get_back_mean_tensor(X, *Y, count_);
   return true;
 }
 
@@ -17,7 +17,7 @@ bool BackMeanGradientOp<float, CPUContext>::RunOnDevice() {
   auto& dY = Input(1);
   auto* dX = Output(0);
   dX->ResizeLike(X);
-  set_back_mean_tensor(*dX, dY);
+  set_back_mean_tensor(*dX, dY, count_);
   return true;
 }
 
@@ -30,10 +30,11 @@ OPERATOR_SCHEMA(BackMean)
   .NumInputs(1)
   .NumOutputs(1)
   .SetDoc(R"DOC(
-The operator takes the mean values over the last dimension.
+The operator takes the mean values over the last dimensions.
 )DOC")
+  .Arg("count", "Number of dimensions to reduce")
   .Input(0, "input", "The input data as N-D Tensor<float>.")
-  .Output(0, "output", "The mean values in a (N-1)-D Tensor.");
+  .Output(0, "output", "The mean values in a (N-count)-D Tensor.");
 
 OPERATOR_SCHEMA(BackMeanGradient).NumInputs(2).NumOutputs(1);
 

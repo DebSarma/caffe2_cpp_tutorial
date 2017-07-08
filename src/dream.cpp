@@ -13,13 +13,13 @@
 #include "util/net.h"
 #include "util/math.h"
 #include "res/imagenet_classes.h"
-#include "operator/operator_cout.h"
+#include "operator/cout_op.h"
 
 
 CAFFE2_DEFINE_string(model, "googlenet", "Name of one of the pre-trained models.");
 CAFFE2_DEFINE_string(layer, "inception_3b/5x5_reduce", "Name of the layer on which to split the model.");
-CAFFE2_DEFINE_int(offset, 2, "The first channel to run.");
-CAFFE2_DEFINE_int(batch, 1, "The number of channels to process in parallel.");
+CAFFE2_DEFINE_int(offset, 0, "The first channel to run.");
+CAFFE2_DEFINE_int(batch, 5, "The number of channels to process in parallel.");
 CAFFE2_DEFINE_int(size, 400, "The goal image size.");
 
 CAFFE2_DEFINE_int(round_count, 10, "The number of different scales.");
@@ -31,55 +31,38 @@ CAFFE2_DEFINE_bool(force_cpu, false, "Only use CPU, no CUDA.");
 
 namespace caffe2 {
 
-void AddSuperNaive(NetDef &init_model, NetDef &predict_model, int label_index) {
-  // add gradients
-  auto &output = predict_model.external_output(0);
-  add_xent_ops(predict_model, output);
-  add_gradient_ops(predict_model);
-  add_iter_lr_ops(init_model, predict_model, FLAGS_learning_rate);
-
-  // add dream operator
-  add_constant_fill_int32_op(init_model, { 1 }, label_index, "label");
-  predict_model.add_external_input("label");
-  add_constant_fill_float_op(init_model, { 1 }, 1.0, "one");
-  predict_model.add_external_input("one");
-  auto &input = predict_model.external_input(0);
-  add_weighted_sum_op(predict_model, { input, "one", input + "_grad", "lr" }, input);
-}
-
-void AddNaive(NetDef &init_model, NetDef &predict_model, int size) {
-  auto &input = predict_model.external_input(0);
-  auto &output = predict_model.external_output(0);
+void AddNaive(NetDef &init_model, NetDef &dream_model, NetDef &display_model, int size) {
+  auto &input = dream_model.external_input(0);
+  auto &output = dream_model.external_output(0);
 
   // initialize input data
   add_uniform_fill_float_op(init_model, { FLAGS_batch, 3, size, size }, FLAGS_initial, FLAGS_initial + 1, input);
 
   // add reduce mean as score
-  add_back_mean_op(predict_model, output, "back1");
-  add_back_mean_op(predict_model, "back1", "back2");
-  add_diagonal_op(predict_model, "back2", "diagonal", { 0, FLAGS_offset });
-  add_averaged_loss(predict_model, "diagonal", "score");
-  add_constant_fill_with_op(predict_model, 1.0, "score", "score_grad");
+  add_back_mean_op(dream_model, output, "mean", 2);
+  add_diagonal_op(dream_model, "mean", "diagonal", { 0, FLAGS_offset });
+  add_averaged_loss(dream_model, "diagonal", "score");
+  add_constant_fill_with_op(dream_model, 1.0, "score", "score_grad");
 
   // add back prop
-  add_gradient_ops(predict_model);
+  add_gradient_ops(dream_model);
 
   // scale gradient
-  add_mean_stdev_op(predict_model, input + "_grad", "_", input + "_grad_stdev");
-  add_constant_fill_with_op(predict_model, 0.0, input + "_grad_stdev", "zero");
-  add_scale_op(predict_model, input + "_grad_stdev", input + "_grad_stdev", 1 / FLAGS_learning_rate);
-  add_affine_transform_op(predict_model, input + "_grad", "zero", input + "_grad_stdev", input + "_grad", true);
+  add_mean_stdev_op(dream_model, input + "_grad", "_", input + "_grad_stdev");
+  add_constant_fill_with_op(dream_model, 0.0, input + "_grad_stdev", "zero");
+  add_scale_op(dream_model, input + "_grad_stdev", input + "_grad_stdev", 1 / FLAGS_learning_rate);
+  add_affine_transform_op(dream_model, input + "_grad", "zero", input + "_grad_stdev", input + "_grad", true);
 
   // apply gradient to input data
   add_constant_fill_float_op(init_model, { 1 }, 1.0, "one");
-  predict_model.add_external_input("one");
-  add_weighted_sum_op(predict_model, { input, "one", input + "_grad", "one" }, input);
+  dream_model.add_external_input("one");
+  add_weighted_sum_op(dream_model, { input, "one", input + "_grad", "one" }, input);
 
   // scale data to image
-  add_mean_stdev_op(predict_model, input, input + "_mean", input + "_stdev");
-  add_affine_transform_op(predict_model, input, input + "_mean", input + "_stdev", "image", true);
-  add_scale_op(predict_model, "image", "image", 25.5);
-  add_clip_op(predict_model, "image", "image", -128, 128);
+  add_mean_stdev_op(display_model, input, input + "_mean", input + "_stdev");
+  add_affine_transform_op(display_model, input, input + "_mean", input + "_stdev", "image", true);
+  add_scale_op(display_model, "image", "image", 25.5);
+  add_clip_op(display_model, "image", "image", -128, 128);
 }
 
 void run() {
@@ -114,19 +97,6 @@ void run() {
 
   if (!FLAGS_force_cpu) setupCUDA();
 
-  // auto label_index = -1;
-  // for (int i = 0; i < 1000; i++) {
-  //   if (!strcmp(FLAGS_label.c_str(), imagenet_classes[i])) {
-  //     label_index = i;
-  //   }
-  // }
-  // if (label_index < 0) {
-  //   for (int i = 0; i < 1000; i++) {
-  //     std::cout << "  " << imagenet_classes[i] << std::endl;
-  //   }
-  //   LOG(FATAL) << "~ image class label not found: " << FLAGS_label;
-  // }
-
   std::cout << std::endl;
 
   std::cout << "loading model.." << std::endl;
@@ -147,28 +117,26 @@ void run() {
   // std::cout << join_net(base_init_model);
   // std::cout << join_net(base_predict_model);
 
-  // std::cout << collect_layers(base_predict_model, "inception_3a/5x5") << std::endl;
-
-  CheckLayerAvailable(base_predict_model, FLAGS_layer);
-
   // extract dream model
-  NetDef dream_init_model, dream_predict_model, second_init_model, second_predict_model;
-  SplitModel(base_init_model, base_predict_model, FLAGS_layer, dream_init_model, dream_predict_model, second_init_model, second_predict_model, FLAGS_force_cpu, false);
+  CheckLayerAvailable(base_predict_model, FLAGS_layer);
+  NetDef init_model, dream_model, display_model, unused_model;
+  SplitModel(base_init_model, base_predict_model, FLAGS_layer, init_model, dream_model, unused_model, unused_model, FLAGS_force_cpu, false);
 
   // add dream operators
   auto image_size = FLAGS_size;
   for (int i = 1; i < FLAGS_round_count; i++) {
     image_size = image_size * 100 / (100 + FLAGS_percent_incr);
   }
-  AddNaive(dream_init_model, dream_predict_model, image_size);
+  AddNaive(init_model, dream_model, display_model, image_size);
 
-  // std::cout << join_net(dream_init_model);
-  // std::cout << join_net(dream_predict_model);
+  // std::cout << join_net(init_model);
+  // std::cout << join_net(dream_model);
 
   // set model to use CUDA
   if (!FLAGS_force_cpu) {
-    set_device_cuda_model(dream_init_model);
-    set_device_cuda_model(dream_predict_model);
+    set_device_cuda_model(init_model);
+    set_device_cuda_model(dream_model);
+    set_engine_cudnn_net(dream_model);
   }
 
   std::cout << "running model.." << std::endl;
@@ -176,13 +144,14 @@ void run() {
   Workspace workspace;
 
   // setup workspace
-  auto init_net = CreateNet(dream_init_model, &workspace);
-  auto predict_net = CreateNet(dream_predict_model, &workspace);
+  auto init_net = CreateNet(init_model, &workspace);
+  auto predict_net = CreateNet(dream_model, &workspace);
+  auto display_net = CreateNet(display_model, &workspace);
   init_net->Run();
 
-  auto &input_name = dream_predict_model.external_input(0);
 
   // read image as tensor
+  // auto &input_name = dream_model.external_input(0);
   // auto input = readImageTensor(FLAGS_image_file, FLAGS_size / 10);
   // set_tensor_blob(*workspace.GetBlob(input_name), input);
   // showImageTensor(input, 0);
@@ -201,13 +170,28 @@ void run() {
       predict_net->Run();
       dream_time += clock();
 
+
       if (!step) {
         auto depth = get_tensor_blob(*workspace.GetBlob(FLAGS_layer)).dim(1);
         std::cout << "channel depth: " << depth << std::endl;
+
         // print(*workspace.GetBlob(FLAGS_layer), FLAGS_layer);
+        // print(*workspace.GetBlob("mean"), "mean");
+        // print(*workspace.GetBlob("diagonal"), "diagonal");
+        // print(*workspace.GetBlob("score"), "score");
+        // print(*workspace.GetBlob("score_grad"), "score_grad");
+        // print(*workspace.GetBlob("diagonal_grad"), "diagonal_grad");
+        // print(*workspace.GetBlob("mean_grad"), "mean_grad");
+        // print(*workspace.GetBlob(FLAGS_layer + "_grad"), FLAGS_layer + "_grad");
+        // print(*workspace.GetBlob("data_grad"), "data_grad");
+        // print(*workspace.GetBlob("data_grad_stdev"), "data_grad_stdev");
+        // print(*workspace.GetBlob("zero"), "zero");
+        // print(*workspace.GetBlob("one"), "one");
+        // print(*workspace.GetBlob("data"), "data");
       }
     }
 
+    display_net->Run();
     auto score = get_tensor_blob(*workspace.GetBlob("score")).data<float>()[0];
     std::cout << "step: " << step << "  score: " << score << "  size: " << image_size << std::endl;
 

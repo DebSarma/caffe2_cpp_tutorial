@@ -133,9 +133,12 @@ OperatorDef *add_diagonal_op(NetDef &model, const std::string &input, const std:
   return op;
 }
 
-OperatorDef *add_back_mean_op(NetDef &model, const std::string &input, const std::string &mean) {
+OperatorDef *add_back_mean_op(NetDef &model, const std::string &input, const std::string &mean, int count = 1) {
   auto op = model.add_op();
   op->set_type("BackMean");
+  auto arg = op->add_arg();
+  arg->set_name("count");
+  arg->set_i(count);
   op->add_input(input);
   op->add_output(mean);
   return op;
@@ -417,6 +420,12 @@ void set_device_cpu_op(OperatorDef &op) {
 
 void set_engine_cudnn_op(OperatorDef &op) {
   op.set_engine("CUDNN");
+}
+
+void set_engine_cudnn_net(NetDef &net) {
+  for (auto &op: *net.mutable_op()) {
+    op.set_engine("CUDNN");
+  }
 }
 
 OperatorDef *add_gradient_op(NetDef &model, OperatorDef &op) {
