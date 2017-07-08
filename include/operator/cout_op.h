@@ -25,8 +25,8 @@ class CoutOp final : public Operator<Context> {
       auto tensor = Input(index++);
       std::cout << title << " (" << tensor.dims() << "): ";
       print(tensor);
+      std::cout << std::endl;
     }
-    std::cout << std::endl;
     return true;
   }
 
