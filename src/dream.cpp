@@ -128,7 +128,7 @@ void run() {
   NetDef init_model, dream_model, display_model, unused_model;
   SplitModel(base_init_model, base_predict_model, FLAGS_layer, init_model, dream_model, unused_model, unused_model, FLAGS_force_cpu, false);
 
-  add_cout_op(dream_model, { "conv2/3x3", "conv2/norm2", "_conv2/norm2_scale" });
+  set_engine_cudnn_op(*add_cout_op(dream_model, { "conv2/3x3", "conv2/norm2", "_conv2/norm2_scale" }));
 
   // add dream operators
   auto image_size = FLAGS_size;
