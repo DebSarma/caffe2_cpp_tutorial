@@ -128,7 +128,7 @@ void run() {
   NetDef init_model, dream_model, display_model, unused_model;
   SplitModel(base_init_model, base_predict_model, FLAGS_layer, init_model, dream_model, unused_model, unused_model, FLAGS_force_cpu, false);
 
-  set_engine_cudnn_op(*add_cout_op(dream_model, { "conv2/3x3", "conv2/norm2", "_conv2/norm2_scale" }));
+  // set_engine_cudnn_op(*add_cout_op(dream_model, { "_conv2/norm2_scale" }));
 
   // add dream operators
   auto image_size = FLAGS_size;
@@ -166,8 +166,16 @@ void run() {
   // set_tensor_blob(*workspace.GetBlob(input_name), input);
   // showImageTensor(input, 0);
 
+  {
+    // show current images
+    display_net->Run();
+    auto image = get_tensor_blob(*workspace.GetBlob("image"));
+    showImageTensor(image, FLAGS_size / 2, FLAGS_size / 2);
+    std::cout << "start size: " << image_size << std::endl;
+  }
+
   // run predictor
-  for (auto step = 0; image_size < FLAGS_size;) {
+  for (auto step = 0; step < FLAGS_round_count;) {
 
     // scale up image tiny bit
     image_size = std::min(image_size * (100 + FLAGS_percent_incr) / 100, FLAGS_size);
@@ -201,19 +209,21 @@ void run() {
       }
     }
 
-    display_net->Run();
     auto score = get_tensor_blob(*workspace.GetBlob("score")).data<float>()[0];
     std::cout << "step: " << step << "  score: " << score << "  size: " << image_size << std::endl;
 
     // show current images
+    display_net->Run();
     auto image = get_tensor_blob(*workspace.GetBlob("image"));
     showImageTensor(image, FLAGS_size / 2, FLAGS_size / 2);
   }
 
-  auto image = get_tensor_blob(*workspace.GetBlob("image"));
-  auto safe_layer = FLAGS_layer;
-  std::replace(safe_layer.begin(), safe_layer.end(), '/', '_');
-  writeImageTensor(image, "dream/" + safe_layer + "_" + std::to_string(FLAGS_offset));
+  {
+    auto image = get_tensor_blob(*workspace.GetBlob("image"));
+    auto safe_layer = FLAGS_layer;
+    std::replace(safe_layer.begin(), safe_layer.end(), '/', '_');
+    writeImageTensor(image, "dream/" + safe_layer + "_" + std::to_string(FLAGS_offset));
+  }
 
   std::cout << std::endl;
 
