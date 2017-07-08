@@ -54,7 +54,7 @@ void AddNaive(NetDef &init_model, NetDef &dream_model, NetDef &display_model, in
   add_mean_stdev_op(dream_model, input + "_grad_host", "_", input + "_grad_stdev");
   set_device_cpu_op(*add_constant_fill_with_op(dream_model, 0.0, input + "_grad_stdev", "zero"));
   set_device_cpu_op(*add_scale_op(dream_model, input + "_grad_stdev", input + "_grad_stdev", 1 / FLAGS_learning_rate));
-  add_affine_transform_op(dream_model, input + "_grad_host", "zero", input + "_grad_stdev", input + "_grad_host", true);
+  add_affine_scale_op(dream_model, input + "_grad_host", "zero", input + "_grad_stdev", input + "_grad_host", true);
   add_copy_from_cpu_input_op(dream_model, input + "_grad_host", input + "_grad");
 
   // apply gradient to input data
@@ -65,7 +65,7 @@ void AddNaive(NetDef &init_model, NetDef &dream_model, NetDef &display_model, in
   // scale data to image
   add_ensure_cpu_output_op(dream_model, input, input + "_host");
   add_mean_stdev_op(display_model, input + "_host", input + "_mean", input + "_stdev");
-  add_affine_transform_op(display_model, input + "_host", input + "_mean", input + "_stdev", "image", true);
+  add_affine_scale_op(display_model, input + "_host", input + "_mean", input + "_stdev", "image", true);
   add_scale_op(display_model, "image", "image", 25.5);
   add_clip_op(display_model, "image", "image", -128, 128);
 }

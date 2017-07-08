@@ -1,11 +1,11 @@
-#include "caffe2/operators/affine_transform_op.h"
+#include "caffe2/operators/affine_scale_op.h"
 #include "caffe2/core/context_gpu.h"
 
 namespace caffe2 {
 
 namespace {
 
-__global__ void AffineTransformKernel(const int N, const float ratio, const float* Xdata, float* Ydata, bool* maskdata) {
+__global__ void AffineScaleKernel(const int N, const float ratio, const float* Xdata, float* Ydata, bool* maskdata) {
   const float scale = 1. / (1. - ratio);
   CUDA_1D_KERNEL_LOOP(i, N) {
     maskdata[i] = (Ydata[i] > ratio);
@@ -16,7 +16,7 @@ __global__ void AffineTransformKernel(const int N, const float ratio, const floa
 }  // namespace
 
 template <>
-bool AffineTransformOp<float, CUDAContext>::RunOnDevice() {
+bool AffineScaleOp<float, CUDAContext>::RunOnDevice() {
   auto& X = Input(0);
   auto* Y = Output(0);
   auto* mask = Output(1);
@@ -33,10 +33,10 @@ bool AffineTransformOp<float, CUDAContext>::RunOnDevice() {
     // boolean numbers, we will generate into dY and write the result to
     // mask.
     float* Ydata = Y->mutable_data<float>();
-    CAFFE_ENFORCE(X.data<float>() != Ydata, "In-place GPU AffineTransform is broken");
+    CAFFE_ENFORCE(X.data<float>() != Ydata, "In-place GPU AffineScale is broken");
     CURAND_ENFORCE(
         curandGenerateUniform(context_.curand_generator(), Ydata, X.size()));
-    AffineTransformKernel<<<CAFFE_GET_BLOCKS(X.size()), CAFFE_CUDA_NUM_THREADS,
+    AffineScaleKernel<<<CAFFE_GET_BLOCKS(X.size()), CAFFE_CUDA_NUM_THREADS,
                     0, context_.cuda_stream()>>>(
         X.size(), ratio_, X.data<float>(), Ydata, mask->mutable_data<bool>());
     return true;
@@ -45,7 +45,7 @@ bool AffineTransformOp<float, CUDAContext>::RunOnDevice() {
 
 namespace {
 
-__global__ void AffineTransformGradientKernel(const int N, const float* dYdata, const bool* maskdata, const float scale, float* dXdata) {
+__global__ void AffineScaleGradientKernel(const int N, const float* dYdata, const bool* maskdata, const float scale, float* dXdata) {
   CUDA_1D_KERNEL_LOOP(i, N) {
     dXdata[i] = dYdata[i] * maskdata[i] * scale;
   }
@@ -54,7 +54,7 @@ __global__ void AffineTransformGradientKernel(const int N, const float* dYdata, 
 }  // namespace
 
 template <>
-bool AffineTransformGradientOp<float, CUDAContext>::RunOnDevice() {
+bool AffineScaleGradientOp<float, CUDAContext>::RunOnDevice() {
   auto& dY = Input(0);
   auto& mask = Input(1);
   auto* dX = Output(0);
@@ -68,7 +68,7 @@ bool AffineTransformGradientOp<float, CUDAContext>::RunOnDevice() {
     return true;
   } else {
     const float scale = 1. / (1. - ratio_);
-    AffineTransformGradientKernel<<<CAFFE_GET_BLOCKS(dY.size()),
+    AffineScaleGradientKernel<<<CAFFE_GET_BLOCKS(dY.size()),
                             CAFFE_CUDA_NUM_THREADS,
                             0, context_.cuda_stream()>>>(
         dY.size(), dY.data<float>(), mask.data<bool>(), scale,
@@ -80,8 +80,8 @@ bool AffineTransformGradientOp<float, CUDAContext>::RunOnDevice() {
 
 namespace {
 
-REGISTER_CUDA_OPERATOR(AffineTransform, AffineTransformOp<float, CUDAContext>);
-REGISTER_CUDA_OPERATOR(AffineTransformGrad, AffineTransformGradientOp<float, CUDAContext>);
+REGISTER_CUDA_OPERATOR(AffineScale, AffineScaleOp<float, CUDAContext>);
+REGISTER_CUDA_OPERATOR(AffineScaleGrad, AffineScaleGradientOp<float, CUDAContext>);
 
 }  // namespace
 

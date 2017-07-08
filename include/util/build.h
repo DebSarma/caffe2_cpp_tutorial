@@ -8,7 +8,7 @@ namespace caffe2 {
 
 static const std::set<std::string> trainable_ops({
   "Add",
-  "AffineTransform",
+  "AffineScale",
   "AveragedLoss",
   "AveragePool",
   "BackMean",
@@ -178,9 +178,9 @@ OperatorDef *add_mean_stdev_op(NetDef &model, const std::string &input, const st
   return op;
 }
 
-OperatorDef *add_affine_transform_op(NetDef &model, const std::string &input, const std::string &mean, const std::string &scale, const std::string &transformed, bool inverse = false) {
+OperatorDef *add_affine_scale_op(NetDef &model, const std::string &input, const std::string &mean, const std::string &scale, const std::string &transformed, bool inverse = false) {
   auto op = model.add_op();
-  op->set_type("AffineTransform");
+  op->set_type("AffineScale");
   auto arg = op->add_arg();
   arg->set_name("inverse");
   arg->set_i(inverse);

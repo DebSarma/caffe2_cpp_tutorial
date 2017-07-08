@@ -1,14 +1,14 @@
-#ifndef AFFINE_TRANSFORM_OP_H
-#define AFFINE_TRANSFORM_OP_H
+#ifndef AFFINE_SCALE_OP_H
+#define AFFINE_SCALE_OP_H
 
 #include "caffe2/core/operator.h"
 
 namespace caffe2 {
 
 template <typename T, class Context>
-class AffineTransformOp final : public Operator<Context> {
+class AffineScaleOp final : public Operator<Context> {
  public:
-  AffineTransformOp(const OperatorDef& operator_def, Workspace* ws)
+  AffineScaleOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
       inverse_(OperatorBase::GetSingleArgument<int>("inverse", 0)) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
@@ -19,9 +19,9 @@ class AffineTransformOp final : public Operator<Context> {
 };
 
 template <typename T, class Context>
-class AffineTransformGradientOp final : public Operator<Context> {
+class AffineScaleGradientOp final : public Operator<Context> {
  public:
-  AffineTransformGradientOp(const OperatorDef& operator_def, Workspace* ws)
+  AffineScaleGradientOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
       inverse_(OperatorBase::GetSingleArgument<int>("inverse", 0)) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
@@ -33,4 +33,4 @@ class AffineTransformGradientOp final : public Operator<Context> {
 
 } // namespace caffe2
 
-#endif // AFFINE_TRANSFORM_OP_H
+#endif // AFFINE_SCALE_OP_H

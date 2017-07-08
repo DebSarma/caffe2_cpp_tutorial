@@ -27,7 +27,7 @@ void min_max_tensor(const Tensor<C> &tensor, float *min_out, float *max_out) {
 }
 
 template<typename C>
-void affine_transform_tensor(Tensor<C> &tensor, float scale, float bias = 0) {
+void affine_scale_tensor(Tensor<C> &tensor, float scale, float bias = 0) {
   auto data = tensor.template mutable_data<float>();
   for (auto b = data, e = b + tensor.size(); b != e; b++) {
     *b = *b * scale + bias;
@@ -114,25 +114,41 @@ void set_back_mean_tensor(Tensor<C> &tensor, const Tensor<C> &mean, int count = 
   auto mean_end = mean_data + mean.size();
   for (auto e = data + tensor.size(); data != e && mean_data != mean_end; mean_data++) {
     for (auto g = data + size; data != g; data++) {
-      *data = *mean_data;
+      *data = *mean_data / size;
     }
   }
 }
 
 template<typename C>
-void get_affine_transform_tensor(const Tensor<C> &tensor, const Tensor<C> &mean, const Tensor<C> &scale, Tensor<C> &transformed, bool inverse = false) {
+void get_affine_scale_tensor(const Tensor<C> &tensor, const Tensor<C> &mean, const Tensor<C> &scale, Tensor<C> &transformed, bool inverse = false) {
   auto data = tensor.template data<float>();
   auto size = tensor.size() / tensor.dim(0);
   auto mean_data = mean.template data<float>();
   auto scale_data = scale.template data<float>();
   auto transformed_data = transformed.template mutable_data<float>();
-  auto transformed_end = transformed_data + transformed.size();
   for (auto e = data + tensor.size(); data != e; mean_data++, scale_data++) {
     for (auto f = data + size; data != f; data++, transformed_data++) {
       if (inverse) {
         *transformed_data = (*data - *mean_data) / (*scale_data + 1e-8);
       } else {
-        *transformed_data = *data * (*scale_data + 1e-8) + *mean_data;
+        *transformed_data = *data * *scale_data + *mean_data;
+      }
+    }
+  }
+}
+
+template<typename C>
+void set_affine_scale_tensor(Tensor<C> &tensor, const Tensor<C> &scale, const Tensor<C> &transformed, bool inverse = false) {
+  auto data = tensor.template mutable_data<float>();
+  auto size = tensor.size() / tensor.dim(0);
+  auto scale_data = scale.template data<float>();
+  auto transformed_data = transformed.template data<float>();
+  for (auto e = data + tensor.size(); data != e; scale_data++) {
+    for (auto f = data + size; data != f; data++, transformed_data++) {
+      if (inverse) {
+        *data = *transformed_data / (*scale_data + 1e-8);
+      } else {
+        *data = *transformed_data * *scale_data;
       }
     }
   }
