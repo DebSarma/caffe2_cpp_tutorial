@@ -8,8 +8,10 @@ namespace caffe2 {
 
 static const std::set<std::string> trainable_ops({
   "Add",
+  "AffineTransform",
   "AveragedLoss",
   "AveragePool",
+  "BackMean",
   "Concat",
   "Conv",
   "Diagonal",
@@ -17,9 +19,7 @@ static const std::set<std::string> trainable_ops({
   "LabelCrossEntropy",
   "LRN",
   "MaxPool",
-  "Mean",
   "Mul",
-  "ReduceBackMean",
   "Relu",
   "Reshape",
   "Slice",
@@ -120,33 +120,46 @@ OperatorDef *add_averaged_loss(NetDef &model, const std::string &input, const st
   return op;
 }
 
-OperatorDef *add_reduce_back_mean_op(NetDef &model, const std::string &input, const std::string &output) {
-  auto op = model.add_op();
-  op->set_type("ReduceBackMean");
-  op->add_input(input);
-  op->add_output(output);
-  return op;
-}
-
-OperatorDef *add_diagonal_op(NetDef &model, const std::string &input, const std::string &diagonal) {
+OperatorDef *add_diagonal_op(NetDef &model, const std::string &input, const std::string &diagonal, const std::vector<int> &offset) {
   auto op = model.add_op();
   op->set_type("Diagonal");
   auto arg = op->add_arg();
   arg->set_name("offset");
-  arg->set_i(0);
+  for (auto o: offset) {
+    arg->add_ints(o);
+  }
   op->add_input(input);
   op->add_output(diagonal);
   return op;
 }
 
-OperatorDef *add_mean_op(NetDef &model, const std::string &input, const std::string &mean) {
+OperatorDef *add_back_mean_op(NetDef &model, const std::string &input, const std::string &mean) {
   auto op = model.add_op();
-  op->set_type("Mean");
-  auto arg = op->add_arg();
-  arg->set_name("offset");
-  arg->set_i(0);
+  op->set_type("BackMean");
   op->add_input(input);
   op->add_output(mean);
+  return op;
+}
+
+OperatorDef *add_mean_stdev_op(NetDef &model, const std::string &input, const std::string &mean, const std::string &scale) {
+  auto op = model.add_op();
+  op->set_type("MeanStdev");
+  op->add_input(input);
+  op->add_output(mean);
+  op->add_output(scale);
+  return op;
+}
+
+OperatorDef *add_affine_transform_op(NetDef &model, const std::string &input, const std::string &mean, const std::string &scale, const std::string &transformed, bool inverse = false) {
+  auto op = model.add_op();
+  op->set_type("AffineTransform");
+  auto arg = op->add_arg();
+  arg->set_name("inverse");
+  arg->set_i(inverse);
+  op->add_input(input);
+  op->add_input(mean);
+  op->add_input(scale);
+  op->add_output(transformed);
   return op;
 }
 
@@ -238,6 +251,20 @@ OperatorDef *add_scale_op(NetDef &model, const std::string &input, const std::st
   auto arg = op->add_arg();
   arg->set_name("scale");
   arg->set_f(scale);
+  op->add_input(input);
+  op->add_output(output);
+  return op;
+}
+
+OperatorDef *add_clip_op(NetDef &model, const std::string &input, const std::string &output, float min, float max) {
+  auto op = model.add_op();
+  op->set_type("Clip");
+  auto arg1 = op->add_arg();
+  arg1->set_name("min");
+  arg1->set_f(min);
+  auto arg2 = op->add_arg();
+  arg2->set_name("max");
+  arg2->set_f(max);
   op->add_input(input);
   op->add_output(output);
   return op;
@@ -443,21 +470,6 @@ void add_xent_ops(NetDef &model, const std::string &output) {
   add_averaged_loss(model, xent_name, loss_name);
   add_accuracy_op(model, output, label_name, accuracy_name);
   add_constant_fill_with_op(model, 1.0, loss_name, loss_name + gradient_suffix);
-}
-
-void add_channel_mean_ops(NetDef &model, const std::string &output, int dim, int count, int channel) {
-  std::vector<std::pair<int, int>> ranges(count);
-  for (int i = 0; i < count; i++) {
-    if (i == dim) {
-      ranges[i] = { channel, channel + 1 };
-    } else {
-      ranges[i] = { 0, -1 };
-    }
-  }
-  add_slice_op(model, output, "slice", ranges);
-  add_reshape_op(model, "slice", "reshape", { 0, -1 });
-  add_averaged_loss(model, "reshape", "score");
-  add_constant_fill_with_op(model, 1.0, "score", "score" + gradient_suffix);
 }
 
 std::map<std::string, int> collect_param_sizes(NetDef &model) {

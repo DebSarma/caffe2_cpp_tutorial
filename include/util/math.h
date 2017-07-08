@@ -47,65 +47,109 @@ void diag_step_size_tensor(const Tensor<C> &tensor, int *step_out, int *size_out
 }
 
 template<typename C>
-void get_diagonal_tensor(const Tensor<C> *tensor, Tensor<C> *diagonal) {
-  // std::cout << "get_diagonal_tensor start" << std::endl;
+int offset_in_tensor(const Tensor<C> &tensor, const std::vector<TIndex> &offset) {
+  auto off = 0, i = 0;
+  for (auto d: tensor.dims()) {
+    off = off * d + offset[i++];
+  }
+  return off;
+}
+
+template<typename C>
+void get_diagonal_tensor(const Tensor<C> &tensor, Tensor<C> &diagonal, const std::vector<TIndex> &offset) {
+  auto off = offset_in_tensor(tensor, offset);
   auto step = 0, size = 0;
-  diag_step_size_tensor(*tensor, &step, &size);
-  diagonal->Resize(size);
-  auto data = tensor->template data<float>();
-  auto diagonal_data = diagonal->template mutable_data<float>();
+  diag_step_size_tensor(tensor, &step, &size);
+  diagonal.Resize(size);
+  auto data = tensor.template data<float>() + off;
+  auto diagonal_data = diagonal.template mutable_data<float>();
   for (auto i = 0; i < size; i++, data += step, diagonal_data++) {
     *diagonal_data = *data;
   }
-  // std::cout << "get_diagonal_tensor end" << std::endl;
 }
 
 template<typename C>
-void set_diagonal_tensor(Tensor<C> *tensor, const Tensor<C> *diagonal) {
-  // std::cout << "set_diagonal_tensor start" << std::endl;
+void set_diagonal_tensor(Tensor<C> &tensor, const Tensor<C> &diagonal, const std::vector<TIndex> &offset) {
+  auto off = offset_in_tensor(tensor, offset);
   auto step = 0, size = 0;
-  diag_step_size_tensor(*tensor, &step, &size);
-  auto data = tensor->template mutable_data<float>();
-  auto diagonal_data = diagonal->template data<float>();
-  for (auto i = 0, s = (int)diagonal->size(); i < size; i++, data += step, diagonal_data++) {
+  diag_step_size_tensor(tensor, &step, &size);
+  auto data = tensor.template mutable_data<float>() + off;
+  auto diagonal_data = diagonal.template data<float>();
+  for (auto i = 0, s = (int)diagonal.size(); i < size; i++, data += step, diagonal_data++) {
     *data = i < s ? *diagonal_data : 0;
   }
-  // std::cout << "set_diagonal_tensor end" << std::endl;
 }
 
 template<typename C>
-void get_mean_tensor(const Tensor<C> *tensor, Tensor<C> *mean) {
-  // std::cout << "get_mean_tensor start" << std::endl;
-  auto dims = tensor->dims();
+void get_back_mean_tensor(const Tensor<C> &tensor, Tensor<C> &mean) {
+  auto dims = tensor.dims();
   auto size = dims.back();
   dims.pop_back();
-  mean->Resize(dims);
-  auto data = tensor->template data<float>();
-  auto mean_data = mean->template mutable_data<float>();
-  auto mean_end = mean_data + mean->size();
-  for (auto e = data + tensor->size(); data != e && mean_data != mean_end; mean_data++) {
+  mean.Resize(dims);
+  auto data = tensor.template data<float>();
+  auto mean_data = mean.template mutable_data<float>();
+  auto mean_end = mean_data + mean.size();
+  for (auto e = data + tensor.size(); data != e && mean_data != mean_end; mean_data++) {
     auto sum = 0.f;
     for (auto g = data + size; data != g; data++) {
       sum += *data;
     }
     *mean_data = sum / size;
   }
-  // std::cout << "get_mean_tensor end" << std::endl;
 }
 
 template<typename C>
-void set_mean_tensor(Tensor<C> *tensor, const Tensor<C> *mean) {
-  // std::cout << "set_mean_tensor start" << std::endl;
-  auto size = tensor->dims().back();
-  auto data = tensor->template mutable_data<float>();
-  auto mean_data = mean->template data<float>();
-  auto mean_end = mean_data + mean->size();
-  for (auto e = data + tensor->size(); data != e && mean_data != mean_end; mean_data++) {
+void set_back_mean_tensor(Tensor<C> &tensor, const Tensor<C> &mean) {
+  auto size = tensor.dims().back();
+  auto data = tensor.template mutable_data<float>();
+  auto mean_data = mean.template data<float>();
+  auto mean_end = mean_data + mean.size();
+  for (auto e = data + tensor.size(); data != e && mean_data != mean_end; mean_data++) {
     for (auto g = data + size; data != g; data++) {
       *data = *mean_data;
     }
   }
-  // std::cout << "set_mean_tensor end" << std::endl;
+}
+
+template<typename C>
+void get_affine_transform_tensor(const Tensor<C> &tensor, const Tensor<C> &mean, const Tensor<C> &scale, Tensor<C> &transformed, bool inverse = false) {
+  auto data = tensor.template data<float>();
+  auto size = tensor.size() / tensor.dim(0);
+  auto mean_data = mean.template data<float>();
+  auto scale_data = scale.template data<float>();
+  auto transformed_data = transformed.template mutable_data<float>();
+  auto transformed_end = transformed_data + transformed.size();
+  for (auto e = data + tensor.size(); data != e; mean_data++, scale_data++) {
+    for (auto f = data + size; data != f; data++, transformed_data++) {
+      if (inverse) {
+        *transformed_data = (*data - *mean_data) / (*scale_data + 1e-8);
+      } else {
+        *transformed_data = *data * (*scale_data + 1e-8) + *mean_data;
+      }
+    }
+  }
+}
+
+template<typename C>
+void get_mean_stdev_tensor(const Tensor<C> &tensor, Tensor<C> &mean, Tensor<C> &stdev) {
+  auto data = tensor.template data<float>();
+  auto size = tensor.size() / tensor.dim(0);
+  auto mean_data = mean.template mutable_data<float>();
+  auto stdev_data = stdev.template mutable_data<float>();
+  for (auto e = data + tensor.size(); data != e; data += size, mean_data++, stdev_data++) {
+    auto sum = 0.f;
+    for (auto d = data, e = data + size; d != e; d++) {
+      sum += *d;
+    }
+    auto mean = sum / size;
+    auto sq_sum = 0.f;
+    for (auto d = data, e = data + size; d != e; d++) {
+      sq_sum += (*d - mean) * (*d - mean);
+    }
+    auto stdev = sqrt(sq_sum / size);
+    *mean_data = mean;
+    *stdev_data = stdev;
+  }
 }
 
 template<typename C>
