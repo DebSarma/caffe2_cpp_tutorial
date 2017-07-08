@@ -104,12 +104,14 @@ void showImageTensor(TensorCPU &tensor, int width, int height, const std::string
   for (auto i = 0; i < tensor.dim(0); i++) {
     auto title = name + "-" + std::to_string(i);
     auto image = tensorToImage(tensor, i, mean);
+#ifndef WITH_CUDA
     cv::resize(image, image, cv::Size(width, height));
     cv::namedWindow(title, cv::WINDOW_AUTOSIZE);
     auto max_cols = screen_width / (image.cols + window_padding);
     cv::moveWindow(title, (i % max_cols) * (image.cols + window_padding), (i / max_cols) * (image.rows + window_padding));
     cv::imshow(title, image);
     cv::waitKey(1);
+#endif
   }
 }
 
