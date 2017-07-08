@@ -15,6 +15,7 @@ static const std::set<std::string> trainable_ops({
   "Concat",
   "Conv",
   "Diagonal",
+  "EnsureCPUOutput",
   "FC",
   "LabelCrossEntropy",
   "LRN",
@@ -34,6 +35,10 @@ static const std::set<std::string> non_trainable_ops({
   "ConstantFill",
   "Dropout",
   "TensorProtosDBInput",
+});
+
+static const std::map<std::string, std::string> custom_gradient({
+  { "EnsureCPUOutput", "CopyFromCPUInput" },
 });
 
 static const std::set<std::string> filler_ops({
@@ -117,6 +122,22 @@ OperatorDef *add_averaged_loss(NetDef &model, const std::string &input, const st
   op->set_type("AveragedLoss");
   op->add_input(input);
   op->add_output(loss);
+  return op;
+}
+
+OperatorDef *add_ensure_cpu_output_op(NetDef &model, const std::string &input, const std::string &output) {
+  auto op = model.add_op();
+  op->set_type("EnsureCPUOutput");
+  op->add_input(input);
+  op->add_output(output);
+  return op;
+}
+
+OperatorDef *add_copy_from_cpu_input_op(NetDef &model, const std::string &input, const std::string &output) {
+  auto op = model.add_op();
+  op->set_type("CopyFromCPUInput");
+  op->add_input(input);
+  op->add_output(output);
   return op;
 }
 
@@ -433,13 +454,27 @@ void set_engine_cudnn_net(NetDef &net) {
 }
 
 OperatorDef *add_gradient_op(NetDef &model, OperatorDef &op) {
-  vector<GradientWrapper> output(op.output_size());
-  for (auto i = 0; i < output.size(); i++) {
-    output[i].dense_ = op.output(i) + gradient_suffix;
-  }
-  GradientOpsMeta meta = GetGradientForOp(op, output);
   auto grad = model.add_op();
-  grad->CopyFrom(meta.ops_[0]);
+  if (custom_gradient.find(op.type()) == custom_gradient.end()) {
+    vector<GradientWrapper> output(op.output_size());
+    for (auto i = 0; i < output.size(); i++) {
+      output[i].dense_ = op.output(i) + gradient_suffix;
+    }
+    GradientOpsMeta meta = GetGradientForOp(op, output);
+    grad->CopyFrom(meta.ops_[0]);
+  } else {
+    grad->set_type(custom_gradient.at(op.type()));
+    for (auto arg: op.arg()) {
+      auto copy = grad->add_arg();
+      copy->CopyFrom(arg);
+    }
+    for (auto output: op.output()) {
+      grad->add_input(output);
+    }
+    for (auto input: op.input()) {
+      grad->add_output(input + "_grad");
+    }
+  }
   grad->set_is_gradient_op(true);
   return grad;
 }

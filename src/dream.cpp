@@ -39,7 +39,8 @@ void AddNaive(NetDef &init_model, NetDef &dream_model, NetDef &display_model, in
   add_uniform_fill_float_op(init_model, { FLAGS_batch, 3, size, size }, FLAGS_initial, FLAGS_initial + 1, input);
 
   // add reduce mean as score
-  add_back_mean_op(dream_model, output, "mean", 2);
+  add_ensure_cpu_output_op(dream_model, output, output + "_host");
+  add_back_mean_op(dream_model, output + "_host", "mean", 2);
   add_diagonal_op(dream_model, "mean", "diagonal", { 0, FLAGS_offset });
   add_averaged_loss(dream_model, "diagonal", "score");
   add_constant_fill_with_op(dream_model, 1.0, "score", "score_grad");
