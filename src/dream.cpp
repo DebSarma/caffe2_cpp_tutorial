@@ -136,7 +136,7 @@ void run() {
   if (!FLAGS_force_cpu) {
     set_device_cuda_model(init_model);
     set_device_cuda_model(dream_model);
-    set_engine_cudnn_net(dream_model);
+    // set_engine_cudnn_net(dream_model);
   }
 
   std::cout << "running model.." << std::endl;
