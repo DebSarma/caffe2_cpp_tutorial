@@ -132,15 +132,15 @@ void run() {
   }
   AddNaive(init_model, dream_model, display_model, image_size);
 
-  // std::cout << join_net(init_model);
-  std::cout << join_net(dream_model);
-
   // set model to use CUDA
   if (!FLAGS_force_cpu) {
     set_device_cuda_model(init_model);
     set_device_cuda_model(dream_model);
     // set_engine_cudnn_net(dream_model);
   }
+
+  std::cout << join_net(init_model);
+  std::cout << join_net(dream_model);
 
   std::cout << "running model.." << std::endl;
   clock_t dream_time = 0;
