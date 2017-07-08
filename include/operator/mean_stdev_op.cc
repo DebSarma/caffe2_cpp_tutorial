@@ -28,6 +28,8 @@ The operator computes the mean and stdev over the batch.
   .Output(0, "mean", "The mean in Tensor of batch size.")
   .Output(1, "stdev", "The stdev in Tensor of batch size.");
 
+SHOULD_NOT_DO_GRADIENT(MeanStdev);
+
 }  // namespace
 
 }  // namespace caffe2
