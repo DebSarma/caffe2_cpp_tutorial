@@ -72,7 +72,7 @@ class CuDNNCoutOp final : public Operator<CUDAContext> {
   bool RunOnDevice() override {
     auto index = 0;
     for (auto &title: titles) {
-      auto tensor = Input(index++);
+      auto tensor = TensorCPU(Input(index++));
       std::cout << title << " (" << tensor.dims() << "): ";
       print(tensor);
       std::cout << std::endl;
