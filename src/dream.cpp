@@ -63,7 +63,7 @@ void AddNaive(NetDef &init_model, NetDef &dream_model, NetDef &display_model, in
   add_weighted_sum_op(dream_model, { input, "one", input + "_grad", "one" }, input);
 
   // scale data to image
-  add_ensure_cpu_output_op(dream_model, input, input + "_host");
+  add_ensure_cpu_output_op(display_model, input, input + "_host");
   add_mean_stdev_op(display_model, input + "_host", input + "_mean", input + "_stdev");
   add_affine_scale_op(display_model, input + "_host", input + "_mean", input + "_stdev", "image", true);
   add_scale_op(display_model, "image", "image", 25.5);
