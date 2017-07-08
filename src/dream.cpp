@@ -133,7 +133,7 @@ void run() {
   AddNaive(init_model, dream_model, display_model, image_size);
 
   // std::cout << join_net(init_model);
-  // std::cout << join_net(dream_model);
+  std::cout << join_net(dream_model);
 
   // set model to use CUDA
   if (!FLAGS_force_cpu) {
