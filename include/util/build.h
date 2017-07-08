@@ -39,6 +39,7 @@ static const std::set<std::string> non_trainable_ops({
 
 static const std::map<std::string, std::string> custom_gradient({
   { "EnsureCPUOutput", "CopyFromCPUInput" },
+  { "CopyFromCPUInput", "EnsureCPUOutput" },
 });
 
 static const std::set<std::string> filler_ops({

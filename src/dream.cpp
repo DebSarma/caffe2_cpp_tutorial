@@ -43,16 +43,18 @@ void AddNaive(NetDef &init_model, NetDef &dream_model, NetDef &display_model, in
   add_back_mean_op(dream_model, output + "_host", "mean", 2);
   add_diagonal_op(dream_model, "mean", "diagonal", { 0, FLAGS_offset });
   set_device_cpu_op(*add_averaged_loss(dream_model, "diagonal", "score"));
-  add_constant_fill_with_op(dream_model, 1.0, "score", "score_grad");
+  set_device_cpu_op(*add_constant_fill_with_op(dream_model, 1.0, "score", "score_grad"));
 
   // add back prop
   add_gradient_ops(dream_model);
 
   // scale gradient
-  add_mean_stdev_op(dream_model, input + "_grad", "_", input + "_grad_stdev");
-  add_constant_fill_with_op(dream_model, 0.0, input + "_grad_stdev", "zero");
+  add_ensure_cpu_output_op(dream_model, input + "_grad", input + "_grad_host");
+  add_mean_stdev_op(dream_model, input + "_grad_host", "_", input + "_grad_stdev");
+  set_device_cpu_op(*add_constant_fill_with_op(dream_model, 0.0, input + "_grad_stdev", "zero"));
   add_scale_op(dream_model, input + "_grad_stdev", input + "_grad_stdev", 1 / FLAGS_learning_rate);
-  add_affine_transform_op(dream_model, input + "_grad", "zero", input + "_grad_stdev", input + "_grad", true);
+  add_affine_transform_op(dream_model, input + "_grad_host", "zero", input + "_grad_stdev", input + "_grad_host", true);
+  add_copy_from_cpu_input_op(dream_model, input + "_grad_host", input + "_grad");
 
   // apply gradient to input data
   add_constant_fill_float_op(init_model, { 1 }, 1.0, "one");
