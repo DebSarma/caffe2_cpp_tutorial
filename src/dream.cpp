@@ -17,13 +17,13 @@
 
 
 CAFFE2_DEFINE_string(model, "googlenet", "Name of one of the pre-trained models.");
-CAFFE2_DEFINE_string(layer, "inception_4d/3x3_reduce", "Name of the layer on which to split the model.");
-CAFFE2_DEFINE_int(channel, 139, "The of channel runs.");
-CAFFE2_DEFINE_int(initial, -28, "The of initial value.");
+CAFFE2_DEFINE_string(layer, "inception_3b/5x5_reduce", "Name of the layer on which to split the model.");
+CAFFE2_DEFINE_int(channel, 14, "The of channel runs.");
+CAFFE2_DEFINE_int(initial, 0, "The of initial value.");
 
 CAFFE2_DEFINE_string(image_file, "res/image_file.jpg", "The image file.");
 // CAFFE2_DEFINE_string(label, "Chihuahua", "What we're dreaming about.");
-CAFFE2_DEFINE_int(train_runs, 10, "The of training runs.");
+CAFFE2_DEFINE_int(train_runs, 100, "The of training runs.");
 CAFFE2_DEFINE_int(size_to_fit, 224, "The image file.");
 CAFFE2_DEFINE_double(learning_rate, 1, "Learning rate.");
 CAFFE2_DEFINE_bool(force_cpu, false, "Only use CPU, no CUDA.");
@@ -47,10 +47,15 @@ void AddSuperNaive(NetDef &init_model, NetDef &predict_model, int label_index) {
 }
 
 void AddNaive(NetDef &init_model, NetDef &predict_model, int channel) {
+  auto &input = predict_model.external_input(0);
   auto &output = predict_model.external_output(0);
-  add_channel_mean_ops(predict_model, output, 1, 4, channel);
+  add_mean_op(predict_model, output, "back1");
+  add_mean_op(predict_model, "back1", "back2");
+  add_diagonal_op(predict_model, "back2", "diagonal");
+  add_averaged_loss(predict_model, "diagonal", "score");
+  add_constant_fill_with_op(predict_model, 1.0, "score", "score_grad");
   add_gradient_ops(predict_model);
-  add_uniform_fill_float_op(init_model, { 1, 3, FLAGS_size_to_fit, FLAGS_size_to_fit }, FLAGS_initial, FLAGS_initial + 1, predict_model.external_input(0));
+  add_uniform_fill_float_op(init_model, { 1, 3, FLAGS_size_to_fit, FLAGS_size_to_fit }, FLAGS_initial, FLAGS_initial + 1, input);
 }
 
 void run() {
@@ -162,6 +167,8 @@ void run() {
   clip_tensor(show, -128, 128);
   showImageTensor(show, 0);
 
+  auto size = data.dim(2);
+
   // run predictor
   for (int i = 1; i <= FLAGS_train_runs; i++) {
     // print(*workspace.GetBlob("data"), "data");
@@ -176,12 +183,12 @@ void run() {
     add_tensor(data, grad);
 
     // print(*workspace.GetBlob(FLAGS_layer), FLAGS_layer);
-    // print(*workspace.GetBlob("slice"), "slice");
-    // print(*workspace.GetBlob("reshape"), "reshape");
+    // print(*workspace.GetBlob("back2"), "back2");
+    // print(*workspace.GetBlob("diagonal"), "diagonal");
     // print(*workspace.GetBlob("score"), "score");
     // print(*workspace.GetBlob("score_grad"), "score_grad");
-    // print(*workspace.GetBlob("reshape_grad"), "reshape_grad");
-    // print(*workspace.GetBlob("slice_grad"), "slice_grad");
+    // print(*workspace.GetBlob("diagonal_grad"), "diagonal_grad");
+    // print(*workspace.GetBlob("back2_grad"), "back2_grad");
     // print(*workspace.GetBlob(FLAGS_layer + "_grad"), FLAGS_layer + "_grad");
     // print(*workspace.GetBlob("data_grad"), "data_grad");
     // break;
@@ -197,8 +204,14 @@ void run() {
 
     auto score = get_tensor_blob(*workspace.GetBlob("score")).data<float>()[0];
     std::cout << "step: " << i << "  score: " << score << std::endl;
+
+    size = size * 101 / 100;
+    auto data2 = get_tensor_blob(*workspace.GetBlob("data"));
+    auto scaled = scaleImageTensor(data2, size, size);
+    set_tensor_blob(*workspace.GetBlob("data"), scaled);
   }
 
+      // writeImageTensor(show, { "deep_" + std::to_string(i) + ".jpg" });
   usleep(5000000);
 
   std::cout << std::endl;

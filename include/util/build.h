@@ -12,10 +12,12 @@ static const std::set<std::string> trainable_ops({
   "AveragePool",
   "Concat",
   "Conv",
+  "Diagonal",
   "FC",
   "LabelCrossEntropy",
   "LRN",
   "MaxPool",
+  "Mean",
   "Mul",
   "ReduceBackMean",
   "Relu",
@@ -123,6 +125,28 @@ OperatorDef *add_reduce_back_mean_op(NetDef &model, const std::string &input, co
   op->set_type("ReduceBackMean");
   op->add_input(input);
   op->add_output(output);
+  return op;
+}
+
+OperatorDef *add_diagonal_op(NetDef &model, const std::string &input, const std::string &diagonal) {
+  auto op = model.add_op();
+  op->set_type("Diagonal");
+  auto arg = op->add_arg();
+  arg->set_name("offset");
+  arg->set_i(0);
+  op->add_input(input);
+  op->add_output(diagonal);
+  return op;
+}
+
+OperatorDef *add_mean_op(NetDef &model, const std::string &input, const std::string &mean) {
+  auto op = model.add_op();
+  op->set_type("Mean");
+  auto arg = op->add_arg();
+  arg->set_name("offset");
+  arg->set_i(0);
+  op->add_input(input);
+  op->add_output(mean);
   return op;
 }
 
@@ -294,6 +318,24 @@ OperatorDef *add_constant_fill_with_op(NetDef &model, float value, const std::st
   return op;
 }
 
+OperatorDef *add_vector_fill_op(NetDef &model, const std::vector<int> &values, const std::string &name) {
+  auto op = model.add_op();
+  op->set_type("GivenTensorFill");
+  auto arg1 = op->add_arg();
+  arg1->set_name("shape");
+  arg1->add_ints(values.size());
+  auto arg2 = op->add_arg();
+  arg2->set_name("values");
+  for (auto v: values) {
+    arg2->add_ints(v);
+  }
+  auto arg3 = op->add_arg();
+  arg3->set_name("dtype");
+  arg3->set_i(TensorProto_DataType_INT32);
+  op->add_output(name);
+  return op;
+}
+
 OperatorDef *add_given_tensor_fill_op(NetDef &model, const TensorCPU &tensor, const std::string &name) {
   auto op = model.add_op();
   op->set_type("GivenTensorFill");
@@ -413,7 +455,7 @@ void add_channel_mean_ops(NetDef &model, const std::string &output, int dim, int
     }
   }
   add_slice_op(model, output, "slice", ranges);
-  add_reshape_op(model, "slice", "reshape", { -1 });
+  add_reshape_op(model, "slice", "reshape", { 0, -1 });
   add_averaged_loss(model, "reshape", "score");
   add_constant_fill_with_op(model, 1.0, "score", "score" + gradient_suffix);
 }
