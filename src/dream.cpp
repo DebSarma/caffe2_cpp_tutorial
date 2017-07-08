@@ -28,6 +28,7 @@ CAFFE2_DEFINE_int(percent_incr, 40, "Percent increase per round.");
 CAFFE2_DEFINE_int(initial, 0, "The of initial value.");
 CAFFE2_DEFINE_double(learning_rate, 1, "Learning rate.");
 CAFFE2_DEFINE_bool(force_cpu, false, "Only use CPU, no CUDA.");
+CAFFE2_DEFINE_bool(dump_model, false, "output dream model.");
 
 namespace caffe2 {
 
@@ -98,6 +99,7 @@ void run() {
   std::cout << "percent_incr: " << FLAGS_percent_incr << std::endl;
   std::cout << "learning_rate: " << FLAGS_learning_rate << std::endl;
   std::cout << "force_cpu: " << (FLAGS_force_cpu ? "true" : "false") << std::endl;
+  std::cout << "dump_model: " << (FLAGS_dump_model ? "true" : "false") << std::endl;
 
   if (!FLAGS_force_cpu) setupCUDA();
 
@@ -140,8 +142,10 @@ void run() {
     // set_engine_cudnn_net(dream_model);
   }
 
-  std::cout << join_net(init_model);
-  std::cout << join_net(dream_model);
+  if (FLAGS_dump_model) {
+    std::cout << join_net(init_model);
+    std::cout << join_net(dream_model);
+  }
 
   std::cout << "running model.." << std::endl;
   clock_t dream_time = 0;
