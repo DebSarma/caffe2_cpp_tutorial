@@ -168,12 +168,13 @@ void run() {
 
   {
     // show current images
+#ifndef WITH_CUDA
     display_net->Run();
     auto image = get_tensor_blob(*workspace.GetBlob("image"));
     showImageTensor(image, FLAGS_size / 2, FLAGS_size / 2);
+#endif
     std::cout << "start size: " << image_size << std::endl;
   }
-
   // run predictor
   for (auto step = 0; step < FLAGS_round_count;) {
 
